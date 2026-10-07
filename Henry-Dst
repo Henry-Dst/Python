@@ -1,0 +1,839 @@
+#Task 1
+
+from matplotlib import pyplot as plt
+
+def draw_point(pt, col):
+    plt.plot(pt[0], pt[1], 'o', color = col)
+
+def draw_segment(seg, col):
+    if seg is None:
+        return None
+    pt1 = seg[0]
+    pt2 = seg[1]
+    plt.plot([pt1[0], pt2[0]], [pt1[1], pt2[1]], '-', color = col)
+
+def draw_path(path, col):
+    if path is None:
+        return None
+    i=1
+    while i<len(path):
+        draw_directed_segment([path[i-1], path[i]], col)
+        i+=1
+
+def draw_window(win, col):
+    if win is None:
+        return None
+    pt1 = [win[0][0], win[1][0]]
+    pt2 = [win[0][1], win[1][0]]
+    pt3 = [win[0][1], win[1][1]]
+    pt4 = [win[0][0], win[1][1]]
+    path = [pt1, pt2, pt3, pt4, pt1]
+    draw_path(path, col)
+
+def draw_directed_segment(dirseg, col):
+    if dirseg is None:
+        return None
+    pt1 = dirseg [0]
+    pt2 = dirseg [1]
+    dx = pt2 [0] - pt1 [0]
+    dy = pt2 [1] - pt1 [1]
+    plt.plot([pt1[0], pt2[0]], [pt1[1], pt2[1]], '-', color=col)
+    plt.quiver(
+        pt1[0], pt1[1], dx, dy,
+        scale_units='xy', angles='xy', scale=1,
+        width=.01,
+        color=col
+    )
+
+
+#Task 2
+
+def lines_intersect(line1, line2):
+    a1 = line1[0]
+    b1 = line1[1]
+    c1 = line1[2]
+    a2 = line2[0]
+    b2 = line2[1]
+    c2 = line2[2]
+    T = 1e-9 #Tolerance
+    #Check if parallel
+    if abs(b1) < T and abs(b2) < T:
+        return None
+    if abs(a2*b1 - a1*b2) < T:
+        return None
+    #When one is vertical
+    if abs(b1) < T: #So a1 != 0 as otherwise would not have a line
+        x = -c1 / a1
+        y = (a2*c1 - a1*c2) / (a1*b2)
+        return [x,y]
+    #Now other line is vertical
+    if abs(b2) < T:
+        x = -c2 / a2
+        y = (a1*c2 - a2*c1) / (a2*b1)
+        return [x,y]
+    x = (b2*c1 - b1*c2) / (a2*b1 - a1*b2)
+    y = (-a1*x - c1) / b1    
+    return [x,y]
+
+
+#Task 3
+
+def line_from_segment(seg):
+    pt1 = seg [0]
+    pt2 = seg [1]
+    if pt1[0] == pt2[0]:
+        return [1,0,-pt1[0]] 
+    dx = pt2 [0] - pt1 [0]
+    dy = pt2 [1] - pt1 [1]
+    a = -dy/dx
+    b = 1
+    c = (dy/dx)*pt1[0] - pt1[1]
+    return [a,b,c]
+
+#Want a function for distance between two points
+def distance_between_points(pt1, pt2):
+    x1 = pt1[0]
+    y1 = pt1[1]
+    x2 = pt2[0]
+    y2 = pt2[1]
+    d = ((x2 - x1)**2 + (y2 - y1)**2)**0.5
+    return d
+
+def point_on_segment(point, seg):
+    T = 1e-9 #Tolerance
+    v1 = [point[0] - seg[0][0], point[1] - seg[0][1]] 
+    v2 = [point[0] - seg[1][0], point[1] - seg[1][1]]
+    #Want to scale T for when segment is large
+    T_scaled = T * distance_between_points(seg[0], seg[1])
+    if v1[0]*v2[0] + v1[1]*v2[1] <= T_scaled:
+        return True
+    if point == seg[0] or point == seg[1]:
+        return True
+    return False
+
+def segments_intersect(seg1,seg2):
+    line1 = line_from_segment(seg1)
+    line2 = line_from_segment(seg2)
+    cross = lines_intersect(line1, line2)
+    if cross is None:
+        if point_on_segment(seg2[0], seg1) and point_on_segment(seg2[1], seg1):
+            return None
+        if point_on_segment(seg1[0], seg2) and point_on_segment(seg1[1], seg2):
+            return None
+        if (seg1[0] == seg2[0] or seg1[0] == seg2[1]) and not point_on_segment(seg1[1], seg2):
+            cross = seg1[0]
+        else:
+            return None
+    if point_on_segment(cross, seg1) and point_on_segment(cross,seg2): 
+        return cross
+    return None
+
+
+#Task 4
+
+import numpy as np
+np.set_printoptions(legacy = '1.25') #Stops output being np.float()
+
+#Due to rounding errors from floating point calculations, want to use distance from 0 instead of < or >
+#So will make a function for comparing distance
+def areclose(a, b):
+    if a is None or b is None:
+        return False
+    T = 1e-9 #Tolerance in error
+    d2 = (a[0]-b[0])**2 + (a[1]-b[1])**2
+    return d2**0.5 <= T
+
+#Also need to change how point_on_segment works
+#And cannot use math.tan so need to make a function using dot product instead to test if point is on ray
+def on_ray(point, ray):
+    T = 1e-9
+    if point is None:
+        return False
+    #Want vector for ray (vx, vy) and vector for ray to point (wx, wy)
+    vx = np.cos(ray[1])
+    vy = np.sin(ray[1])
+    wx = point[0] - ray[0][0]
+    wy = point[1] - ray[0][1]
+    #Test that vectors are parallel using cross product = 0
+    cp = vx*wy - vy*wx
+    if abs(cp) > T:
+        return False
+    #Now check point lies on correct side of ray start point
+    #Will use dot product >= 0
+    dp = vx*wx + vy*wy
+    if dp < -T:
+        return False
+    return True
+
+def ray_segment_intersect(ray, seg):
+    T = 1e-9
+    if abs(ray[1] - np.pi/2) <= T:
+        rayline = [1, 0, -ray[0][0]]
+    elif abs(ray[1] - 3*np.pi/2) <=T:
+        rayline = [1, 0, -ray[0][0]]
+    else:
+        rayline = [-np.tan(ray[1]), 1, ray[0][0]*np.tan(ray[1]) -ray[0][1]]
+    line2 = line_from_segment(seg)
+    cross = lines_intersect(rayline, line2)
+    if cross is None:
+        #If ray and seg are parallel, common end point but seg is not contained within ray
+        if areclose(seg[0], ray[0]) and on_ray(seg[1], ray) == False:
+            return ray[0]
+        #Same but switched seg end points
+        if areclose(seg[1], ray[0]) and on_ray(seg[0], ray) == False:
+            return ray[0]
+        if on_ray(seg[0], ray) or on_ray(seg[1], ray):
+            return None
+        else:
+            return None
+    if on_ray(cross, ray) and point_on_segment(cross, seg):
+        x = float(cross[0])
+        y = float(cross[1])
+        return [x, y]
+
+
+#Task 5
+
+#Need to have window as list of segments (a path)
+def window_as_path(win):
+    pt1 = [win[0][0], win[1][0]]
+    pt2 = [win[0][1], win[1][0]]
+    pt3 = [win[0][1], win[1][1]]
+    pt4 = [win[0][0], win[1][1]]
+    linesegs = [[pt1, pt2], [pt2, pt3], [pt3, pt4], [pt4, pt1]]
+    return linesegs
+
+#Need a function for where line and seg intersect
+def line_segment_intersect(line, seg):
+    line1 = line
+    line2 = line_from_segment(seg)
+    cross = lines_intersect(line1, line2)
+    if cross is None:
+        return None
+    if point_on_segment(cross, seg):
+        return cross
+    
+
+def draw_line_in_window(line, window, col):
+    linesegs = window_as_path(window)
+    cross0 = line_segment_intersect(line, linesegs[0])
+    cross1 = line_segment_intersect(line, linesegs[1])
+    cross2 = line_segment_intersect(line, linesegs[2])
+    cross3 = line_segment_intersect(line, linesegs[3])
+    seg = [cross0, cross1, cross2, cross3]
+    #Want just one copy of each cross that is not None
+    i=0
+    single = []
+    while i<len(seg):
+        if seg[i] is None:
+            i+=1
+        else:
+            k=i+1
+            unique = True
+            while k<len(seg):
+                if areclose(seg[i], seg[k]) and unique:
+                    unique = False
+                k+=1
+            if unique:
+                single.append(seg[i])
+            i+=1
+    if len(single) == 1:
+        draw_point(single[0], col)
+    draw_segment(single, col)
+
+
+#Task 6
+
+#Want a function to tell if a point is in a window
+def point_in_window(pt, window):
+    inside = True
+    if pt[0] < window[0][0] or pt[0] > window[0][1]:
+        inside = False
+    if pt[1] < window[1][0] or pt[1] > window[1][1]:
+        inside = False
+    return inside
+
+def draw_lines_and_window(line1, line2, window):
+    draw_line_in_window(line1, window, 'red')
+    draw_line_in_window(line2, window, 'yellow')
+    draw_window(window, 'blue')
+    cross = lines_intersect(line1, line2)
+    if cross is not None and point_in_window(cross, window):
+        draw_point(cross, 'green')
+
+
+#Task 7
+
+def draw_ray_in_window(ray, window, col):
+    linesegs = window_as_path(window)
+    cross0 = ray_segment_intersect(ray, linesegs[0])
+    cross1 = ray_segment_intersect(ray, linesegs[1])
+    cross2 = ray_segment_intersect(ray, linesegs[2])
+    cross3 = ray_segment_intersect(ray, linesegs[3])
+    seg = [cross0, cross1, cross2, cross3]
+    #Want just one copy of each cross that is not None
+    i=0
+    single = []
+    while i<len(seg):
+        if seg[i] is None:
+            i+=1 #Filters out elements of seg that are None
+        else:
+            k=i+1
+            unique = True
+            while k<len(seg):
+                if areclose(seg[i], seg[k]) and unique:
+                    unique = False
+                k+=1
+            if unique:
+                single.append(seg[i])
+            i+=1
+    if len(single) == 0:
+        return None
+    if len(single) == 1:
+        if on_ray(single[0], ray):
+            rayseg = [ray[0], single[0]]
+            draw_directed_segment(rayseg, col)
+        elif point_in_window(ray[0], window):
+            draw_point(single[0], col)
+        return None
+    if len(single) == 2:
+        p0 = single[0]
+        p1 = single[1]
+        p0_on_ray = on_ray(p0, ray) #So don't do this multiple times
+        p1_on_ray = on_ray(p1, ray) #Same here
+        if p0_on_ray and not p1_on_ray:
+            rayseg = [ray[0], p0]
+        elif p1_on_ray and not p0_on_ray:
+            rayseg = [ray[0], p1]
+        elif p0_on_ray and p1_on_ray:
+            if distance_between_points(p0, ray[0]) < distance_between_points(p1, ray[0]):
+                rayseg = [p0, p1]
+            else:
+                rayseg = [p1, p0]
+    else:
+        return None
+    draw_directed_segment(rayseg, col)
+
+
+#Task 8
+import math
+
+#Want a function for ray intersecting window
+def ray_window_intersect(ray, window): #Are assuming the ray starts within the window
+    linesegs = window_as_path(window)
+    cross0 = ray_segment_intersect(ray, linesegs[0])
+    cross1 = ray_segment_intersect(ray, linesegs[1])
+    cross2 = ray_segment_intersect(ray, linesegs[2])
+    cross3 = ray_segment_intersect(ray, linesegs[3])
+    seg = [cross0, cross1, cross2, cross3]
+    i = 0
+    while i < len(seg):
+        if seg[i] is None:
+            i+=1
+        else:
+            cross = seg[i]
+            i+=1
+    return cross
+
+def one_bounce(ray, seg, win): #Remember to consider when ray is perp to seg
+    if ray_segment_intersect(ray, seg) is None:
+        path = [ray[0], ray_window_intersect(ray, win)]
+        return path
+    else: #Avoiding trig functions due to rounding errors from float point calculations
+        collide = ray_segment_intersect(ray, seg)
+        #Calculate unit vector vin
+        dxin = collide[0] - ray[0][0]
+        dyin = collide[1] - ray[0][1]
+        mod_vin = ((dxin)**2 + (dyin)**2)**0.5
+        vin = np.array([dxin, dyin]) / mod_vin
+        #Calculate unit segment vector s
+        seg_dx = seg[1][0] - seg[0][0]
+        seg_dy = seg[1][1] - seg[0][1]
+        mod_seg = ((seg_dx)**2 + (seg_dy)**2)**0.5
+        s = np.array([seg_dx, seg_dy]) / mod_seg
+        #So the normal is -reflection of this
+        n = np.array([-s[1], s[0]])
+        #Want normal to be on same side of segment as the ray
+        if np.dot(vin, n) > 0: #Because they should be pointing in opposite directions
+            n = -n
+        vout = vin - 2*n*np.dot(vin, n)
+        #Now want rayout so need angle theta_out
+        theta_out = math.atan2(vout[1], vout[0])
+        rayout = [collide, float(theta_out)]
+        #Find final part of path then put all together
+        exitpoint = ray_window_intersect(rayout, win)
+        path = [ray[0], collide, exitpoint]
+        return path
+    
+
+#Task 9
+
+def draw_one_bounce(path, seg, win):
+    draw_window(win, 'blue')
+    draw_segment(seg, 'red')
+    if len(path) == 2:
+        draw_directed_segment(path, 'green')
+    if len(path) == 3:
+        draw_directed_segment([path[0], path[1]], 'green')
+        draw_directed_segment([path[1], path[2]], 'orange')
+
+
+#Task 10
+
+#Making a variation of one_bounce that returns rayout rather than the path
+
+def reflected_ray(rayin, seg):
+    collide = ray_segment_intersect(rayin, seg)
+    if collide is None:
+        return None
+    else: #Avoiding trig functions due to rounding errors from float point calculations
+        #Calculate unit vector vin
+        dxin = collide[0] - rayin[0][0]
+        dyin = collide[1] - rayin[0][1]
+        mod_vin = ((dxin)**2 + (dyin)**2)**0.5
+        if mod_vin == 0:
+            return None
+        vin = np.array([dxin, dyin]) / mod_vin
+        #Calculate unit segment vector s
+        seg_dx = seg[1][0] - seg[0][0]
+        seg_dy = seg[1][1] - seg[0][1]
+        mod_seg = ((seg_dx)**2 + (seg_dy)**2)**0.5
+        if mod_seg == 0:
+            return None
+        s = np.array([seg_dx, seg_dy]) / mod_seg
+        #So the normal is perpendicular to this
+        n = np.array([-s[1], s[0]])
+        #Want normal to be on same side of segment as the ray
+        if np.dot(vin, n) > 0: #Because they should be pointing in opposite directions
+            n = -n
+        vout = vin - 2*n*np.dot(vin, n)
+        #Now want rayout so need angle theta_out
+        theta_out = math.atan2(vout[1], vout[0])
+        #Want to offset origin of rayout slightly
+        T = 1e-8
+        rayout = [list(np.array(collide) + T*vout), theta_out]
+        return rayout
+    
+def multi_bounce(ray, seglist, win, maxpathlen):
+    path = [ray[0]]
+    rayin = ray
+    i=1
+    while i <= maxpathlen:
+        #Want to find which seg ray collides with
+        k=0
+        #Possible collision points are:
+        collisions = []
+        while k < len(seglist):
+            rayout = reflected_ray(rayin, seglist[k])
+            if rayout is None:
+                k+=1
+            else:
+                collisions.append([rayout, seglist[k]]) # list of [[start point, angle], seg]
+                k+=1
+        #If no collision points then ray exits window
+        if len(collisions) == 0:
+            exitpoint = ray_window_intersect(rayin, win)
+            path.append(exitpoint)
+            return path
+        #Want closest collision point
+        r = 1
+        closest = collisions[0] #Want closest to give point, angle and segment
+        while r < len(collisions):
+            if distance_between_points(collisions[r][0][0], rayin[0]) < distance_between_points(closest[0][0], rayin[0]):
+                closest = collisions[r] #[[start point, angle], seg]
+            r+=1
+        path.append(closest[0][0])
+        #Want to make rayout the new rayin
+        rayout = closest[0]
+        rayin = rayout
+        i+=1
+    return path
+
+
+#Task 11
+
+def draw_multi_bounce(path, seglist, win):
+    draw_window(win, 'blue')
+    i = 0
+    while i < len(seglist):
+        draw_segment(seglist[i], 'red')
+        i+=1
+    draw_path(path, 'green')
+
+
+#Task 12
+
+#Want function for getting pathlist
+def n_multi_bounce(raylist, seglist, win, maxpathlen):
+    pathlist = []
+    i = 0
+    while i < len(raylist):
+        path = multi_bounce(raylist[i], seglist, win, maxpathlen)
+        pathlist.append(path)
+        i+=1
+    return pathlist
+
+#Want multiple colours to cycle through for the different paths
+colours = ['green', 'orange', 'purple', 'cyan', 'magenta',  'yellow']
+
+def draw_n_multi_bounce(pathlist, seglist, win):
+    draw_window(win, 'blue')
+    i = 0
+    while i < len(seglist):
+        draw_segment(seglist[i], 'red')
+        i+=1
+    #Want to draw each path within pathlist
+    k = 0
+    while k < len(pathlist):
+        col = colours[k % len(colours)] #Produces a different remainder for each k<len(colours)
+        draw_path(pathlist[k], col)
+        k+=1
+
+
+#Task 13
+
+#Feels very unclear how many paths are to be returned in the "list of paths"
+#So will include in the function inputs variable n for number of paths
+
+#Want function for if point is on window
+def point_on_window(pt, win): #Are assuming the point is in the window
+    T = 1e-9
+    dx1 = abs(pt[0] - win[0][0])
+    dx2 = abs(pt[0] - win[0][1])
+    dy1 = abs(pt[1] - win[1][0])
+    dy2 = abs(pt[1] - win[1][1])
+    if dx1 < T or dx2 < T or dy1 < T or dy2 < T:
+        return True
+    return False
+
+#Want function for which window edge point is on
+def point_on_window_edge(pt, win): #Are assuming the point is in the window
+    T = 1e-9
+    dx1 = abs(pt[0] - win[0][0])
+    dx2 = abs(pt[0] - win[0][1])
+    dy1 = abs(pt[1] - win[1][0])
+    dy2 = abs(pt[1] - win[1][1])
+    #going to assume it cannot perfectly hit the corner due to floating points
+    if dx1 <= T:
+        return 0
+    if dx2 <= T:
+        return 1
+    if dy1 <= T:
+        return 2
+    if dy2 <= T:
+        return 3 #This way we know which edge the point is on
+    return False
+
+#Want a function similar to multi_bounce that returns final ray not just position
+#Would simply amend the return for multi_bounce to give final ray as well
+#But Task 10 explicitly asks for a path returned, so will leave that as it is
+def ray_from_multi_bounce(ray, win, seglist, maxpathlen):
+    rayin = ray
+    i=1
+    while i <= maxpathlen:
+        #Want to find which seg ray collides with
+        k=0
+        #Possible collision points are:
+        collisions = []
+        while k < len(seglist):
+            rayout = reflected_ray(rayin, seglist[k])
+            if rayout is None:
+                k+=1
+            else:
+                collisions.append([rayout, seglist[k]]) # list of [[start point, angle], seg]
+                k+=1
+        #If no collision points then ray is unchanged
+        if len(collisions) == 0:
+            return rayin
+        #Want closest collision point
+        r = 1
+        closest = collisions[0] #Want closest to give point, angle and segment
+        while r < len(collisions):
+            if distance_between_points(collisions[r][0][0], rayin[0]) < distance_between_points(closest[0][0], rayin[0]):
+                closest = collisions[r] #[[start point, angle], seg]
+            r+=1
+        #Want to make rayout the new rayin
+        rayout = closest[0]
+        rayin = rayout
+        i+=1
+    return rayout
+
+def multi_bounce_wrap(ray, seglist, window, pathlen, n):
+    pathlist = []
+    i = 0
+    start_ray = ray
+    while i < n:
+        path = multi_bounce(start_ray, seglist, window, pathlen)
+        k = len(path)
+        rayout = ray_from_multi_bounce(start_ray, seglist, window, pathlen)
+        if point_on_window(path[k-1], window) is False:
+            start_ray = rayout
+        else:
+            no_edge = point_on_window_edge(path[k-1], window)
+            if no_edge == 0: #So is on first x boundary
+                start_ray = [[window[0][1], float(rayout[0][1])], rayout[1]]
+            elif no_edge == 1: #So is on second x boundary
+                start_ray = [[window[0][0], float(rayout[0][1])], rayout[1]]
+            elif no_edge == 2: #So is on first y boundary
+                start_ray = [[float(rayout[0][0]), window[1][1]], rayout[1]]
+            elif no_edge == 3: #So is on second y boundary
+                start_ray = [[float(rayout[0][0]), window[1][0]], rayout[1]]
+        #The float()'s are to convert rayout[][] from 1x1 np.array to floats
+        pathlist.append(path)
+        i+=1
+    return pathlist
+
+
+#Task 14
+
+#Want a function for length of a track
+def len_of_track(track): #Track is a path
+    i = 1
+    distance = 0
+    while i < len(track):
+        d = distance_between_points(track[i-1], track[i])
+        distance += d
+        i+=1
+    return distance
+
+#Will assume the particle can only change direction by reflecting off an obstacle
+#Will assume the window edges do not count as obstacles
+#So the particle will pass through the window edges
+
+#Can create rays from startpoint of increasing angle and put them through multibounce to see if endpoint lies on any
+#So want a function that determines how far from the path the endpoint is
+#So first want a function that determines distance between point and seg
+def distance_point_to_seg(point, seg):
+    T = 1e-9
+    if point_on_segment(point, seg):
+        return 0
+    dx = seg[1][0] - seg[0][0]
+    dy = seg[1][1] - seg[0][1] #Seg direction vector first-second
+    vx = point[0] - seg[0][0]
+    vy = point[1] - seg[0][1] #First seg endpoint to point
+    wx = point[0] - seg[1][0]
+    wy = point[1] - seg[1][1] #Second seg endpoint to point
+    mod_seg = (dx**2 + dy**2)**0.5
+    if mod_seg < T: #When seg is of zero length
+        return distance_between_points(point, seg[0])
+    # < T functions as <= 0
+    dp_first = vx*dx + vy*dy
+    if dp_first < T: #Closest point is first seg endpoint
+        return distance_between_points(point, seg[0])
+    dp_second = -wx*dx - wy*dy #Negative because direction of seg is flipped
+    if dp_second < T: #Closest point is second seg endpoint
+        return distance_between_points(point, seg[1])
+    if dp_first > T and dp_second > T: #Point is inbetween endpoints
+        cross = abs(vx*dy - vy*dx)
+        distance = cross / mod_seg
+        return distance
+    return None
+        
+def distance_point_to_path(point, path):
+    if len(path) < 2:
+        return None
+    distance = distance_point_to_seg(point, [path[0], path[1]])
+    i = 2
+    while i < len(path):
+        d = distance_point_to_seg(point, [path[i-1], path[i]])
+        if d is not None and d < distance:
+            distance = d
+        i+=1
+    return distance
+
+def single_path_approx(startpoint, endpoint, seglist, window):
+    T = 1e-9
+    possible_paths = []
+    start_to_end = [endpoint[0] - startpoint[0], endpoint[1] - startpoint[1]]
+    #Will start by testing ray that points straight to endpoint
+    theta_0 = math.atan2(start_to_end[1], start_to_end[0])
+    #Will set maxpathlen = 20 as by this point the path should leave window
+    maxpathlen = 20
+    i = 0
+    while i < 101:
+        theta = theta_0 + i*0.0625
+        path = multi_bounce([startpoint, theta], seglist, window, maxpathlen)
+        d = distance_point_to_path(endpoint, path)
+        if d < T: #So endpoint is on the path
+            possible_paths.append(path)
+            i+=1
+        else:
+            i+=1
+    l = len(possible_paths)
+    if l == 0:
+        return None
+    if l == 1:
+        return possible_paths[0]
+    if l > 1:
+        shortest = possible_paths[0]
+        k = 1
+        while k < l:
+            len_shortest = len_of_track(shortest)
+            if len_of_track(possible_paths[k]) < len_shortest:
+                shortest = possible_paths[k]
+            k+=1
+    return shortest
+#This function only approximates a path, will write a new one building off this though
+
+#To extend the function so it considers paths that must reflect off segments first to reach endpoint
+#Want a function that creates other target 'endpoints' which are endpoint reflected across the required segment
+def reflect_point_across_seg(point, seg):
+    T = 1e-9
+    dx = seg[1][0] - seg[0][0]
+    dy = seg[1][1] - seg[0][1]
+    mod_seg2 = dx**2 + dy**2
+    if mod_seg2 < T:
+        return None
+    vx = point[0] - seg[0][0]
+    vy = point[1] - seg[0][1] #Vector seg[0] to point
+    dp = vx*dx + vy*dy #Dot product between above vectors
+    t = dp / mod_seg2 #Scalar for projection
+    rx = 2*(seg[0][0] + t*dx) - point[0]
+    ry = 2*(seg[0][1] + t*dy) - point[1]
+    reflected_point = [rx, ry]
+    return reflected_point
+    
+def single_path_finder(startpoint, endpoint, seglist, window):
+    T = 1e-9
+    possible_paths = []
+    #Want a list of targets and corresponding thetas for the starting rays
+    #Starting with original startpoint
+    start_to_end = [endpoint[0] - startpoint[0], endpoint[1] - startpoint[1]]
+    theta = math.atan2(start_to_end[1], start_to_end[0])
+    targets = [[startpoint, theta]]
+    r = 0
+    while r < len(seglist):
+        new_target = reflect_point_across_seg(endpoint, seglist[r])
+        if new_target is None:
+            r+=1
+            continue #Skips rest of code in loop and starts again with r+=1
+        direction = [new_target[0] - startpoint[0], new_target[1] - startpoint[1]]
+        theta = math.atan2(direction[1], direction[0])
+        targets.append([new_target, theta, seglist[r]])
+        r+=1
+    #Will set maxpathlen = 20 as an upper bound on number of reflections
+    maxpathlen = 20
+    #Want to consider original start2end separate as no restrictions exist on its first bounce
+    ray = [startpoint, targets[0][1]]
+    i = 0
+    while i <= maxpathlen:
+        path = multi_bounce(ray, seglist, window, i)
+        d = distance_point_to_path(endpoint, path)
+        if d is not None and d < T:
+            possible_paths.append(path)
+        i+=1
+    #Now want to consider all reflected endpoints which require first collision to be on corresponding segment
+    a = 1
+    while a < len(targets):
+        ray = [startpoint, targets[a][1]]
+        i = 0
+        while i <= maxpathlen:
+            path = multi_bounce(ray, seglist, window, i)
+            if len(path) < 3:
+                i+=1
+                continue
+            if len(path) >= 3:
+                first_bounce = path[1]
+                if point_on_segment(first_bounce, targets[a][2]) is False:
+                    i+=1
+                    continue
+            d = distance_point_to_path(endpoint, path)
+            if d is not None and d < T: #So endpoint is on the path
+                possible_paths.append(path)
+            i+=1
+        a+=1
+    l = len(possible_paths)
+    if l == 0:
+        return None
+    shortest = possible_paths[0]
+    k = 1
+    while k < l:
+        len_shortest = len_of_track(shortest)
+        if len_of_track(possible_paths[k]) < len_shortest:
+            shortest = possible_paths[k]
+        k+=1
+    return shortest
+
+
+#Task 15
+
+#Need a function similar to single_path_finder that returns "all" possible paths so can then sort them into order
+
+def unordered_multiple_path_finder(startpoint, endpoint, seglist, window):
+    T = 1e-9
+    possible_paths = []
+    #Want a list of targets and corresponding thetas for the starting rays
+    #Starting with original startpoint
+    start_to_end = [endpoint[0] - startpoint[0], endpoint[1] - startpoint[1]]
+    theta = math.atan2(start_to_end[1], start_to_end[0])
+    targets = [[startpoint, theta]]
+    r = 0
+    while r < len(seglist):
+        new_target = reflect_point_across_seg(endpoint, seglist[r])
+        if new_target is None:
+            r+=1
+            continue #Skips rest of code in loop and starts again with r+=1
+        direction = [new_target[0] - startpoint[0], new_target[1] - startpoint[1]]
+        theta = math.atan2(direction[1], direction[0])
+        targets.append([new_target, theta, seglist[r]])
+        r+=1
+    #Will set maxpathlen = 20 as an upper bound on number of reflections
+    maxpathlen = 20
+    #Want to consider original start2end separate as no restrictions exist on its first bounce
+    ray = [startpoint, targets[0][1]]
+    i = 0
+    while i <= maxpathlen:
+        path = multi_bounce(ray, seglist, window, i)
+        d = distance_point_to_path(endpoint, path)
+        if d is not None and d < T:
+            possible_paths.append(path)
+        i+=1
+    #Now want to consider all reflected endpoints which require first collision to be on corresponding segment
+    a = 1
+    while a < len(targets):
+        ray = [startpoint, targets[a][1]]
+        i = 0
+        while i <= maxpathlen:
+            path = multi_bounce(ray, seglist, window, i)
+            if len(path) < 3:
+                i+=1
+                continue
+            if len(path) >= 3:
+                first_bounce = path[1]
+                if point_on_segment(first_bounce, targets[a][2]) is False:
+                    i+=1
+                    continue
+            d = distance_point_to_path(endpoint, path)
+            if d is not None and d < T: #So endpoint is on the path
+                possible_paths.append(path)
+            i+=1
+        a+=1
+    l = len(possible_paths)
+    if l == 0:
+        return None
+    return possible_paths
+
+def multiple_path_finder(startpoint, endpoint, seglist, window, n):
+    possible_paths = unordered_multiple_path_finder(startpoint, endpoint, seglist, window)
+    if possible_paths is None:
+        return None
+    #Want to create new ordered_possible_paths shortest to longest
+    i = 0
+    ordered_possible_paths = []
+    l = len(possible_paths)
+    p_p_copy = possible_paths.copy() #Copy of possible_paths that will use to create ordered list
+    while i < l:
+        shortest = p_p_copy[0]
+        k = 1
+        while k < len(p_p_copy):
+            len_shortest = len_of_track(shortest)
+            if len_of_track(p_p_copy[k]) < len_shortest:
+                shortest = p_p_copy[k]
+            k+=1
+        ordered_possible_paths.append(shortest)
+        p_p_copy.remove(shortest)
+        i+=1
+    #Now have an ordered_possible_paths
+    if len(ordered_possible_paths) < n:
+        return ordered_possible_paths
+    return ordered_possible_paths[:n]
